@@ -1,0 +1,201 @@
+# ------------------------------------------------------------
+# Docker Compose configuration
+# ------------------------------------------------------------
+#
+# Docker Compose allows us to define and run a multi-container
+# application from one YAML file.
+#
+# This application has two services:
+#
+#   1. web -> PHP + Apache application
+#   2. db  -> MySQL database
+#
+# Docker Compose also creates a private network automatically,
+# allowing the containers to communicate with each other.
+# ------------------------------------------------------------
+
+services:
+
+  # ==========================================================
+  # WEB SERVICE
+  # ==========================================================
+  web:
+
+    # build: .
+    #
+    # The dot means:
+    # "Use the Dockerfile in the current project directory
+    #  to build the image for this service."
+    build: .
+
+    # Gives the running container an easy-to-recognize name.
+    container_name: php_web
+
+    # --------------------------------------------------------
+    # PORT MAPPING
+    # --------------------------------------------------------
+    #
+    # Format:
+    #
+    #   "HOST_PORT:CONTAINER_PORT"
+    #
+    # Port 8080 is opened on our computer.
+    # Apache listens on port 80 inside the container.
+    #
+    # Therefore:
+    #
+    #   Browser -> localhost:8080 -> container port 80
+    #
+    ports:
+      - "8080:80"
+
+    # --------------------------------------------------------
+    # ENVIRONMENT VARIABLES
+    # --------------------------------------------------------
+    #
+    # These values are passed into the PHP container.
+    #
+    # PHP reads them using getenv().
+    #
+    # DB_HOST is "db" instead of "localhost" because the MySQL
+    # database is running in another container.
+    #
+    # Docker Compose automatically provides DNS, so the service
+    # name "db" becomes the hostname used by the web container.
+    environment:
+      DB_HOST: db
+      DB_NAME: studentdb
+      DB_USER: appuser
+      DB_PASSWORD: apppassword
+
+    # --------------------------------------------------------
+    # STARTUP DEPENDENCY
+    # --------------------------------------------------------
+    #
+    # The PHP application needs the database.
+    #
+    # depends_on tells Docker Compose not to start the web
+    # service until the db service passes its health check.
+    depends_on:
+      db:
+        condition: service_healthy
+
+
+  # ==========================================================
+  # DATABASE SERVICE
+  # ==========================================================
+  db:
+
+    # Instead of building MySQL ourselves, we use an existing
+    # official MySQL image.
+    image: mysql:8.4
+
+    # Easy-to-recognize container name.
+    container_name: mysql_db
+
+    # Restart the container automatically unless we stop it
+    # ourselves.
+    restart: unless-stopped
+
+    # --------------------------------------------------------
+    # MYSQL INITIAL CONFIGURATION
+    # --------------------------------------------------------
+    #
+    # These variables are understood by the official MySQL
+    # Docker image.
+    #
+    # On first startup MySQL will create:
+    #
+    #   Database: studentdb
+    #   User:     appuser
+    #   Password: apppassword
+    #
+    # NOTE:
+    # These simple passwords are suitable only for this
+    # classroom/demo application.
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpassword
+      MYSQL_DATABASE: studentdb
+      MYSQL_USER: appuser
+      MYSQL_PASSWORD: apppassword
+
+    # --------------------------------------------------------
+    # VOLUMES
+    # --------------------------------------------------------
+    #
+    # First volume:
+    #
+    #   mysql_data:/var/lib/mysql
+    #
+    # stores the actual database outside the lifecycle of the
+    # container. This means data can survive container removal
+    # and recreation.
+    #
+    # Second volume:
+    #
+    #   ./db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    #
+    # mounts our SQL initialization file inside the MySQL
+    # container.
+    #
+    # The official MySQL image automatically executes .sql
+    # files inside /docker-entrypoint-initdb.d/ when the
+    # database is initialized for the first time.
+    #
+    # :ro means "read only".
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+
+    # --------------------------------------------------------
+    # HEALTH CHECK
+    # --------------------------------------------------------
+    #
+    # A container can be running before MySQL is actually ready
+    # to accept connections.
+    #
+    # The healthcheck repeatedly runs mysqladmin ping.
+    #
+    # Only after this succeeds is the database considered
+    # "healthy".
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "mysqladmin",
+          "ping",
+          "-h",
+          "localhost",
+          "-uroot",
+          "-prootpassword"
+        ]
+
+      # Check every 5 seconds.
+      interval: 5s
+
+      # Each health-check attempt may take at most 5 seconds.
+      timeout: 5s
+
+      # Mark the container unhealthy after 10 failed attempts.
+      retries: 10
+
+
+# ============================================================
+# NAMED VOLUMES
+# ============================================================
+#
+# This declares the mysql_data volume used above.
+#
+# Docker manages this storage area for us.
+#
+# The database files remain here even if the MySQL container
+# is deleted with:
+#
+#   docker compose down
+#
+# To delete the volume as well, use:
+#
+#   docker compose down -v
+#
+volumes:
+  mysql_data:

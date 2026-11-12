@@ -1,0 +1,6 @@
+# Files/folders Docker does not need when building the image
+
+.git
+.gitignore
+README.md
+*.zip

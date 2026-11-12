@@ -1,0 +1,9 @@
+.DS_Store
+config/stripe.php
+storage/student_ids/*
+storage/dispute_evidence/*
+storage/sim_payment.token
+storage/automation.last
+public/uploads/
+!storage/student_ids/.gitkeep
+!storage/dispute_evidence/.gitkeep
